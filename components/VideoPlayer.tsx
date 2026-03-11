@@ -98,6 +98,7 @@ export function VideoPlayer({ playData, qualities, currentQn, onQualityChange, o
             isFullscreen={true}
             initialTime={lastTimeRef.current}
             onTimeUpdate={(t) => { lastTimeRef.current = t; onTimeUpdate?.(t); }}
+            style={{ width: '100%', height: '100%' }}
           />
         </View>
       </Modal>
