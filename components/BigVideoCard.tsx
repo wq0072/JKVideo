@@ -37,6 +37,7 @@ export function BigVideoCard({ item, isVisible, onPress }: Props) {
   const [videoUrl, setVideoUrl] = useState<string | undefined>();
   const [isDash, setIsDash] = useState(false);
   const [paused, setPaused] = useState(true);
+  const [muted, setMuted] = useState(true);
   const thumbOpacity = useRef(new Animated.Value(1)).current;
 
   // Reset video state when the item changes
@@ -44,6 +45,7 @@ export function BigVideoCard({ item, isVisible, onPress }: Props) {
     setVideoUrl(undefined);
     setIsDash(false);
     setPaused(true);
+    setMuted(true);
     thumbOpacity.setValue(1);
   }, [item.bvid]);
 
@@ -88,6 +90,7 @@ export function BigVideoCard({ item, isVisible, onPress }: Props) {
     if (!videoUrl) return;
     setPaused(!isVisible);
     if (!isVisible) {
+      setMuted(true);
       // Restore thumbnail when leaving viewport
       Animated.timing(thumbOpacity, {
         toValue: 1,
@@ -111,9 +114,28 @@ export function BigVideoCard({ item, isVisible, onPress }: Props) {
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
       {/* Media area */}
       <View style={[mediaDimensions, { position: "relative" }]}>
-        {/* Thumbnail */}
+        {/* Video player — rendered first so it sits behind the thumbnail */}
+        {videoUrl && (
+          <Video
+            source={
+              isDash
+                ? { uri: videoUrl, type: "mpd", headers: HEADERS }
+                : { uri: videoUrl, headers: HEADERS }
+            }
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+            muted={muted}
+            paused={paused}
+            repeat
+            controls={false}
+            onReadyForDisplay={handleVideoReady}
+          />
+        )}
+
+        {/* Thumbnail — on top of Video, fades out once video is ready */}
         <Animated.View
           style={[StyleSheet.absoluteFill, { opacity: thumbOpacity }]}
+          pointerEvents="none"
         >
           <Image
             source={{ uri: proxyImageUrl(item.pic) }}
@@ -136,22 +158,19 @@ export function BigVideoCard({ item, isVisible, onPress }: Props) {
           </Text>
         </View>
 
-        {/* Video player — only mounted when URL is available */}
-        {videoUrl && (
-          <Video
-            source={
-              isDash
-                ? { uri: videoUrl, type: "mpd", headers: HEADERS }
-                : { uri: videoUrl, headers: HEADERS }
-            }
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            muted
-            paused={paused}
-            repeat
-            controls={false}
-            onReadyForDisplay={handleVideoReady}
-          />
+        {/* Mute toggle — visible only when video is playing */}
+        {videoUrl && !paused && (
+          <TouchableOpacity
+            style={styles.muteBtn}
+            onPress={() => setMuted((m) => !m)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={muted ? "volume-mute" : "volume-high"}
+              size={16}
+              color="#fff"
+            />
+          </TouchableOpacity>
         )}
       </View>
 
@@ -188,6 +207,18 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   durationText: { color: "#fff", fontSize: 10 },
+  muteBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 14,
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 3,
+  },
   info: { padding: 8 },
   title: { fontSize: 14, color: "#212121", lineHeight: 18, marginBottom: 4 },
   meta: {

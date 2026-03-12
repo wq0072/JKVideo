@@ -190,6 +190,7 @@ export function NativeVideoPlayer({
 
   const [showQuality, setShowQuality] = useState(false);
 
+  const [buffered, setBuffered] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const isSeekingRef = useRef(false);
   const [touchX, setTouchX] = useState<number | null>(null);
@@ -332,6 +333,7 @@ export function NativeVideoPlayer({
   const touchRatio =
     touchX !== null ? clamp(touchX / barWidthRef.current, 0, 1) : null;
   const progressRatio = duration > 0 ? clamp(currentTime / duration, 0, 1) : 0;
+  const bufferedRatio = duration > 0 ? clamp(buffered / duration, 0, 1) : 0;
 
   const THUMB_DISPLAY_W = 120; // scaled display width
 
@@ -419,9 +421,10 @@ export function NativeVideoPlayer({
           resizeMode="contain"
           controls={false}
           paused={paused}
-          onProgress={({ currentTime: ct, seekableDuration: dur }) => {
+          onProgress={({ currentTime: ct, seekableDuration: dur, playableDuration: buf }) => {
             setCurrentTime(ct);
             if (dur > 0) setDuration(dur);
+            setBuffered(buf);
             onTimeUpdate?.(ct);
           }}
           onLoad={() => {
@@ -498,16 +501,18 @@ export function NativeVideoPlayer({
               {...panResponder.panHandlers}
             >
               <View style={styles.track}>
+                {/* Buffered: lighter white overlay on top of base */}
                 <View
                   style={[
-                    styles.seg,
-                    { flex: 1, backgroundColor: "#00AEEC" },
+                    styles.trackLayer,
+                    { width: `${bufferedRatio * 100}%` as any, backgroundColor: "rgba(255,255,255,0.35)" },
                   ]}
                 />
+                {/* Played: accent color on top */}
                 <View
                   style={[
-                    styles.playedOverlay,
-                    { width: `${progressRatio * 100}%` as any },
+                    styles.trackLayer,
+                    { width: `${progressRatio * 100}%` as any, backgroundColor: "#00AEEC" },
                   ]}
                 />
               </View>
@@ -672,18 +677,15 @@ const styles = StyleSheet.create({
   },
   track: {
     height: BAR_H,
-    flexDirection: "row",
     borderRadius: 2,
     overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(255,255,255,0.2)",
   },
-  seg: { height: BAR_H },
-  playedOverlay: {
+  trackLayer: {
     position: "absolute",
     top: 0,
     left: 0,
     height: BAR_H,
-    backgroundColor: "rgba(255,255,255,0.3)",
   },
   ball: {
     position: "absolute",

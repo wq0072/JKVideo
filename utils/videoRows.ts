@@ -27,11 +27,19 @@ export function toListRows(videos: VideoItem[]): ListRow[] {
   const rows: ListRow[] = [];
   for (let start = 0; start < videos.length; start += PAGE) {
     const chunk = videos.slice(start, start + PAGE);
-    const body = chunk.slice(0, chunk.length - 1);
-    for (let i = 0; i < body.length; i += 2) {
-      rows.push({ type: 'pair', left: body[i], right: body[i + 1] ?? null });
+    // Pick the video with the highest view count as the BigRow
+    let bigIdx = 0;
+    let maxView = chunk[0].stat?.view ?? 0;
+    for (let i = 1; i < chunk.length; i++) {
+      const v = chunk[i].stat?.view ?? 0;
+      if (v > maxView) { maxView = v; bigIdx = i; }
     }
-    rows.push({ type: 'big', item: chunk[chunk.length - 1] });
+    const bigItem = chunk[bigIdx];
+    const rest = chunk.filter((_, i) => i !== bigIdx);
+    for (let i = 0; i < rest.length; i += 2) {
+      rows.push({ type: 'pair', left: rest[i], right: rest[i + 1] ?? null });
+    }
+    rows.push({ type: 'big', item: bigItem });
   }
 
   return rows;
