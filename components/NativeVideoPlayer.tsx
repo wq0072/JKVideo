@@ -1,4 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { formatDuration } from "../utils/format";
 import {
   View,
@@ -61,7 +68,6 @@ interface Props {
   currentQn: number;
   onQualityChange: (qn: number) => void;
   onFullscreen: () => void;
-  onMiniPlayer?: () => void;
   style?: object;
   bvid?: string;
   cid?: number;
@@ -72,499 +78,514 @@ interface Props {
   forcePaused?: boolean;
 }
 
-export const NativeVideoPlayer = forwardRef<NativeVideoPlayerRef, Props>(function NativeVideoPlayer({
-  playData,
-  qualities,
-  currentQn,
-  onQualityChange,
-  onFullscreen,
-  onMiniPlayer,
-  style,
-  bvid,
-  cid,
-  danmakus,
-  isFullscreen,
-  onTimeUpdate,
-  initialTime,
-  forcePaused,
-}: Props, ref) {
-  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
-  const VIDEO_H = SCREEN_W * 0.5625;
+export const NativeVideoPlayer = forwardRef<NativeVideoPlayerRef, Props>(
+  function NativeVideoPlayer(
+    {
+      playData,
+      qualities,
+      currentQn,
+      onQualityChange,
+      onFullscreen,
+      style,
+      bvid,
+      cid,
+      danmakus,
+      isFullscreen,
+      onTimeUpdate,
+      initialTime,
+      forcePaused,
+    }: Props,
+    ref,
+  ) {
+    const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+    const VIDEO_H = SCREEN_W * 0.5625;
 
-  const [resolvedUrl, setResolvedUrl] = useState<string | undefined>();
-  const isDash = !!playData?.dash;
+    const [resolvedUrl, setResolvedUrl] = useState<string | undefined>();
+    const isDash = !!playData?.dash;
 
-  const [showControls, setShowControls] = useState(true);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [showControls, setShowControls] = useState(true);
+    const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [paused, setPaused] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const durationRef = useRef(0);
+    const [paused, setPaused] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const durationRef = useRef(0);
 
-  const [showQuality, setShowQuality] = useState(false);
+    const [showQuality, setShowQuality] = useState(false);
 
-  const [buffered, setBuffered] = useState(0);
-  const [isSeeking, setIsSeeking] = useState(false);
-  const isSeekingRef = useRef(false);
-  const [touchX, setTouchX] = useState<number | null>(null);
-  const touchXRef = useRef<number | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const barOffsetX = useRef(0);
-  const barWidthRef = useRef(300);
-  const trackRef = useRef<View>(null);
+    const [buffered, setBuffered] = useState(0);
+    const [isSeeking, setIsSeeking] = useState(false);
+    const isSeekingRef = useRef(false);
+    const [touchX, setTouchX] = useState<number | null>(null);
+    const touchXRef = useRef<number | null>(null);
+    const rafRef = useRef<number | null>(null);
+    const barOffsetX = useRef(0);
+    const barWidthRef = useRef(300);
+    const trackRef = useRef<View>(null);
 
-  const [shots, setShots] = useState<VideoShotData | null>(null);
-  const [showDanmaku, setShowDanmaku] = useState(true);
+    const [shots, setShots] = useState<VideoShotData | null>(null);
+    const [showDanmaku, setShowDanmaku] = useState(true);
 
-  const videoRef = useRef<VideoRef>(null);
+    const videoRef = useRef<VideoRef>(null);
 
-  useImperativeHandle(ref, () => ({
-    seek: (t: number) => { videoRef.current?.seek(t); },
-  }));
-
-  const currentDesc =
-    qualities.find((q) => q.qn === currentQn)?.desc ??
-    String(currentQn || "HD");
-
-  // 解析播放链接，dash 需要构建 mpd uri，普通链接直接取第一个 durl。使用 useEffect 监听 playData 和 currentQn 变化，确保每次切换视频或清晰度时都能正确更新播放链接。错误处理逻辑保证即使 dash mpd 构建失败也能回退到普通链接，提升兼容性。
-  useEffect(() => {
-    if (!playData) {
-      setResolvedUrl(undefined);
-      return;
-    }
-    if (isDash) {
-      buildDashMpdUri(playData, currentQn)
-        .then(setResolvedUrl)
-        .catch(() => setResolvedUrl(playData.dash!.video[0]?.baseUrl));
-    } else {
-      setResolvedUrl(playData.durl?.[0]?.url);
-    }
-  }, [playData, currentQn]);
-  // 获取视频截图数据，供进度条预览使用。依赖 bvid 和 cid，确保在视频切换时重新获取截图。使用 cancelled 标志避免在组件卸载后更新状态，防止内存泄漏和潜在的错误。
-  useEffect(() => {
-    if (!bvid || !cid) return;
-    let cancelled = false;
-    getVideoShot(bvid, cid).then((shotData) => {
-      if (cancelled) return;
-      if (shotData?.image?.length) {
-        setShots(shotData);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [bvid, cid]);
-
-  useEffect(() => {
-    durationRef.current = duration;
-  }, [duration]);
-
-  // 控制栏自动隐藏逻辑：每次用户交互后重置计时器，3秒无交互则隐藏。使用 useRef 存储计时器 ID 和拖动状态，避免闭包问题导致的计时器失效或误触发。
-  const resetHideTimer = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (!isSeekingRef.current) {
-      hideTimer.current = setTimeout(() => setShowControls(false), HIDE_DELAY);
-    }
-  }, []);
-  // 显示控制栏并重置隐藏计时器，确保用户每次交互后都有足够时间查看控制栏。依赖 resetHideTimer 保持稳定引用，避免不必要的重新渲染。
-  const showAndReset = useCallback(() => {
-    setShowControls(true);
-    resetHideTimer();
-  }, [resetHideTimer]);
-
-  // 点击视频区域切换控制栏显示状态，显示时重置隐藏计时器，隐藏时直接隐藏。使用 useCallback 优化性能，避免不必要的函数重新创建。
-  const handleTap = useCallback(() => {
-    setShowControls((prev) => {
-      if (!prev) {
-        resetHideTimer();
-        return true;
-      }
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      return false;
-    });
-  }, [resetHideTimer]);
-
-  // 组件卸载时清理隐藏计时器，避免内存泄漏和潜在的状态更新错误。依赖项为空数组确保只在挂载和卸载时执行一次。
-  useEffect(() => {
-    resetHideTimer();
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
-  }, []);
-
-  const measureTrack = useCallback(() => {
-    trackRef.current?.measureInWindow((x, _y, w) => {
-      if (w > 0) {
-        barOffsetX.current = x;
-        barWidthRef.current = w;
-      }
-    });
-  }, []);
-  //  使用 PanResponder 实现进度条拖动，支持在拖动过程中显示预览图。通过 touchXRef 和 rafRef 优化拖动性能，避免频繁更新状态导致的卡顿。用户松开拖动时，根据最终位置计算对应的时间点并跳转，同时清理状态和隐藏预览图。
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (_, gs) => {
-        isSeekingRef.current = true;
-        setIsSeeking(true);
-        setShowControls(true);
-        if (hideTimer.current) clearTimeout(hideTimer.current);
-        const x = clamp(gs.x0 - barOffsetX.current, 0, barWidthRef.current);
-        touchXRef.current = x;
-        setTouchX(x);
-      },
-      onPanResponderMove: (_, gs) => {
-        touchXRef.current = clamp(
-          gs.moveX - barOffsetX.current,
-          0,
-          barWidthRef.current,
-        );
-        if (!rafRef.current) {
-          rafRef.current = requestAnimationFrame(() => {
-            setTouchX(touchXRef.current);
-            rafRef.current = null;
-          });
-        }
-      },
-      //  用户松开拖动，或拖动被中断（如来电），都视为结束拖动，需要清理状态和隐藏预览
-      onPanResponderRelease: (_, gs) => {
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
-        }
-        const ratio = clamp(
-          (gs.moveX - barOffsetX.current) / barWidthRef.current,
-          0,
-          1,
-        );
-        const t = ratio * durationRef.current;
+    useImperativeHandle(ref, () => ({
+      seek: (t: number) => {
         videoRef.current?.seek(t);
-        setCurrentTime(t);
-        touchXRef.current = null;
-        setTouchX(null);
-        isSeekingRef.current = false;
-        setIsSeeking(false);
-        if (hideTimer.current) clearTimeout(hideTimer.current);
+      },
+    }));
+
+    const currentDesc =
+      qualities.find((q) => q.qn === currentQn)?.desc ??
+      String(currentQn || "HD");
+
+    // 解析播放链接，dash 需要构建 mpd uri，普通链接直接取第一个 durl。使用 useEffect 监听 playData 和 currentQn 变化，确保每次切换视频或清晰度时都能正确更新播放链接。错误处理逻辑保证即使 dash mpd 构建失败也能回退到普通链接，提升兼容性。
+    useEffect(() => {
+      if (!playData) {
+        setResolvedUrl(undefined);
+        return;
+      }
+      if (isDash) {
+        buildDashMpdUri(playData, currentQn)
+          .then(setResolvedUrl)
+          .catch(() => setResolvedUrl(playData.dash!.video[0]?.baseUrl));
+      } else {
+        setResolvedUrl(playData.durl?.[0]?.url);
+      }
+    }, [playData, currentQn]);
+    // 获取视频截图数据，供进度条预览使用。依赖 bvid 和 cid，确保在视频切换时重新获取截图。使用 cancelled 标志避免在组件卸载后更新状态，防止内存泄漏和潜在的错误。
+    useEffect(() => {
+      if (!bvid || !cid) return;
+      let cancelled = false;
+      getVideoShot(bvid, cid).then((shotData) => {
+        if (cancelled) return;
+        if (shotData?.image?.length) {
+          setShots(shotData);
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [bvid, cid]);
+
+    useEffect(() => {
+      durationRef.current = duration;
+    }, [duration]);
+
+    // 控制栏自动隐藏逻辑：每次用户交互后重置计时器，3秒无交互则隐藏。使用 useRef 存储计时器 ID 和拖动状态，避免闭包问题导致的计时器失效或误触发。
+    const resetHideTimer = useCallback(() => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (!isSeekingRef.current) {
         hideTimer.current = setTimeout(
           () => setShowControls(false),
           HIDE_DELAY,
         );
-      },
-      onPanResponderTerminate: () => {
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
+      }
+    }, []);
+    // 显示控制栏并重置隐藏计时器，确保用户每次交互后都有足够时间查看控制栏。依赖 resetHideTimer 保持稳定引用，避免不必要的重新渲染。
+    const showAndReset = useCallback(() => {
+      setShowControls(true);
+      resetHideTimer();
+    }, [resetHideTimer]);
+
+    // 点击视频区域切换控制栏显示状态，显示时重置隐藏计时器，隐藏时直接隐藏。使用 useCallback 优化性能，避免不必要的函数重新创建。
+    const handleTap = useCallback(() => {
+      setShowControls((prev) => {
+        if (!prev) {
+          resetHideTimer();
+          return true;
         }
-        touchXRef.current = null;
-        setTouchX(null);
-        isSeekingRef.current = false;
-        setIsSeeking(false);
-      },
-    }),
-  ).current;
-  // 进度条上触摸位置对应的时间点比例，0-1。非拖动状态为 null
-  const touchRatio =
-    touchX !== null ? clamp(touchX / barWidthRef.current, 0, 1) : null;
-  const progressRatio = duration > 0 ? clamp(currentTime / duration, 0, 1) : 0;
-  const bufferedRatio = duration > 0 ? clamp(buffered / duration, 0, 1) : 0;
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        return false;
+      });
+    }, [resetHideTimer]);
 
-  const THUMB_DISPLAY_W = 120; // scaled display width
+    // 组件卸载时清理隐藏计时器，避免内存泄漏和潜在的状态更新错误。依赖项为空数组确保只在挂载和卸载时执行一次。
+    useEffect(() => {
+      resetHideTimer();
+      return () => {
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+      };
+    }, []);
 
-  const renderThumbnail = () => {
-    if (touchRatio === null || !shots || !isSeeking) return null;
-    const {
-      img_x_size: TW,
-      img_y_size: TH,
-      img_x_len,
-      img_y_len,
-      image,
-      index,
-    } = shots;
-    const framesPerSheet = img_x_len * img_y_len;
-    const totalFrames = framesPerSheet * image.length;
-    const seekTime = touchRatio * duration;
-    // 通过时间戳索引找到最接近的帧，若无索引则均匀映射到总帧数上
-    const frameIdx =
-      index?.length && duration > 0
-        ? clamp(findFrameByTime(index, seekTime), 0, index.length - 1)
-        : clamp(Math.floor(touchRatio * (totalFrames - 1)), 0, totalFrames - 1);
+    const measureTrack = useCallback(() => {
+      trackRef.current?.measureInWindow((x, _y, w) => {
+        if (w > 0) {
+          barOffsetX.current = x;
+          barWidthRef.current = w;
+        }
+      });
+    }, []);
+    //  使用 PanResponder 实现进度条拖动，支持在拖动过程中显示预览图。通过 touchXRef 和 rafRef 优化拖动性能，避免频繁更新状态导致的卡顿。用户松开拖动时，根据最终位置计算对应的时间点并跳转，同时清理状态和隐藏预览图。
+    const panResponder = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (_, gs) => {
+          isSeekingRef.current = true;
+          setIsSeeking(true);
+          setShowControls(true);
+          if (hideTimer.current) clearTimeout(hideTimer.current);
+          const x = clamp(gs.x0 - barOffsetX.current, 0, barWidthRef.current);
+          touchXRef.current = x;
+          setTouchX(x);
+        },
+        onPanResponderMove: (_, gs) => {
+          touchXRef.current = clamp(
+            gs.moveX - barOffsetX.current,
+            0,
+            barWidthRef.current,
+          );
+          if (!rafRef.current) {
+            rafRef.current = requestAnimationFrame(() => {
+              setTouchX(touchXRef.current);
+              rafRef.current = null;
+            });
+          }
+        },
+        //  用户松开拖动，或拖动被中断（如来电），都视为结束拖动，需要清理状态和隐藏预览
+        onPanResponderRelease: (_, gs) => {
+          if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+          }
+          const ratio = clamp(
+            (gs.moveX - barOffsetX.current) / barWidthRef.current,
+            0,
+            1,
+          );
+          const t = ratio * durationRef.current;
+          videoRef.current?.seek(t);
+          setCurrentTime(t);
+          touchXRef.current = null;
+          setTouchX(null);
+          isSeekingRef.current = false;
+          setIsSeeking(false);
+          if (hideTimer.current) clearTimeout(hideTimer.current);
+          hideTimer.current = setTimeout(
+            () => setShowControls(false),
+            HIDE_DELAY,
+          );
+        },
+        onPanResponderTerminate: () => {
+          if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+          }
+          touchXRef.current = null;
+          setTouchX(null);
+          isSeekingRef.current = false;
+          setIsSeeking(false);
+        },
+      }),
+    ).current;
+    // 进度条上触摸位置对应的时间点比例，0-1。非拖动状态为 null
+    const touchRatio =
+      touchX !== null ? clamp(touchX / barWidthRef.current, 0, 1) : null;
+    const progressRatio =
+      duration > 0 ? clamp(currentTime / duration, 0, 1) : 0;
+    const bufferedRatio = duration > 0 ? clamp(buffered / duration, 0, 1) : 0;
 
-    const sheetIdx = Math.floor(frameIdx / framesPerSheet);
-    const local = frameIdx % framesPerSheet;
-    const col = local % img_x_len;
-    const row = Math.floor(local / img_x_len);
-    console.log("[thumb]", {
-      seekTime,
-      duration,
-      indexLen: index?.length,
-      frameIdx,
-      totalFrames,
-      sheetIdx,
-      col,
-      row,
-    });
-    //  根据单帧图尺寸和预设的显示宽度计算缩放后的显示尺寸，保持宽高比
-    const scale = THUMB_DISPLAY_W / TW;
-    const DW = THUMB_DISPLAY_W;
-    const DH = Math.round(TH * scale);
+    const THUMB_DISPLAY_W = 120; // scaled display width
 
-    const trackLeft = barOffsetX.current;
-    const absLeft = clamp(trackLeft + (touchX ?? 0) - DW / 2, 0, SCREEN_W - DW);
-    // 兼容处理图床地址，确保以 http(s) 协议开头
-    const sheetUrl = image[sheetIdx].startsWith("//")
-      ? `https:${image[sheetIdx]}`
-      : image[sheetIdx];
+    const renderThumbnail = () => {
+      if (touchRatio === null || !shots || !isSeeking) return null;
+      const {
+        img_x_size: TW,
+        img_y_size: TH,
+        img_x_len,
+        img_y_len,
+        image,
+        index,
+      } = shots;
+      const framesPerSheet = img_x_len * img_y_len;
+      const totalFrames = framesPerSheet * image.length;
+      const seekTime = touchRatio * duration;
+      // 通过时间戳索引找到最接近的帧，若无索引则均匀映射到总帧数上
+      const frameIdx =
+        index?.length && duration > 0
+          ? clamp(findFrameByTime(index, seekTime), 0, index.length - 1)
+          : clamp(
+              Math.floor(touchRatio * (totalFrames - 1)),
+              0,
+              totalFrames - 1,
+            );
+
+      const sheetIdx = Math.floor(frameIdx / framesPerSheet);
+      const local = frameIdx % framesPerSheet;
+      const col = local % img_x_len;
+      const row = Math.floor(local / img_x_len);
+      console.log("[thumb]", {
+        seekTime,
+        duration,
+        indexLen: index?.length,
+        frameIdx,
+        totalFrames,
+        sheetIdx,
+        col,
+        row,
+      });
+      //  根据单帧图尺寸和预设的显示宽度计算缩放后的显示尺寸，保持宽高比
+      const scale = THUMB_DISPLAY_W / TW;
+      const DW = THUMB_DISPLAY_W;
+      const DH = Math.round(TH * scale);
+
+      const trackLeft = barOffsetX.current;
+      const absLeft = clamp(
+        trackLeft + (touchX ?? 0) - DW / 2,
+        0,
+        SCREEN_W - DW,
+      );
+      // 兼容处理图床地址，确保以 http(s) 协议开头
+      const sheetUrl = image[sheetIdx].startsWith("//")
+        ? `https:${image[sheetIdx]}`
+        : image[sheetIdx];
+      return (
+        <View
+          style={[styles.thumbPreview, { left: absLeft, width: DW }]}
+          pointerEvents="none"
+        >
+          <View
+            style={{
+              width: DW,
+              height: DH,
+              overflow: "hidden",
+              borderRadius: 4,
+            }}
+          >
+            <Image
+              source={{ uri: sheetUrl, headers: HEADERS }}
+              style={{
+                position: "absolute",
+                width: TW * img_x_len * scale,
+                height: TH * img_y_len * scale,
+                left: -col * DW,
+                top: -row * DH,
+              }}
+            />
+          </View>
+          <Text style={styles.thumbTime}>
+            {formatDuration(Math.floor(seekTime))}
+          </Text>
+        </View>
+      );
+    };
+
     return (
       <View
-        style={[styles.thumbPreview, { left: absLeft, width: DW }]}
-        pointerEvents="none"
+        style={[
+          isFullscreen
+            ? styles.fsContainer
+            : [styles.container, { width: SCREEN_W, height: VIDEO_H }],
+          style,
+        ]}
       >
-        <View
-          style={{ width: DW, height: DH, overflow: "hidden", borderRadius: 4 }}
-        >
-          <Image
-            source={{ uri: sheetUrl, headers: HEADERS }}
-            style={{
-              position: "absolute",
-              width: TW * img_x_len * scale,
-              height: TH * img_y_len * scale,
-              left: -col * DW,
-              top: -row * DH,
+        {resolvedUrl ? (
+          <Video
+            key={resolvedUrl}
+            ref={videoRef}
+            source={
+              isDash
+                ? { uri: resolvedUrl, type: "mpd", headers: HEADERS }
+                : { uri: resolvedUrl, headers: HEADERS }
+            }
+            style={StyleSheet.absoluteFill}
+            resizeMode="contain"
+            controls={false}
+            paused={!!(forcePaused || paused)}
+            onProgress={({
+              currentTime: ct,
+              seekableDuration: dur,
+              playableDuration: buf,
+            }) => {
+              setCurrentTime(ct);
+              if (dur > 0) setDuration(dur);
+              setBuffered(buf);
+              onTimeUpdate?.(ct);
+            }}
+            onLoad={() => {
+              if (initialTime && initialTime > 0) {
+                videoRef.current?.seek(initialTime);
+              }
             }}
           />
-        </View>
-        <Text style={styles.thumbTime}>
-          {formatDuration(Math.floor(seekTime))}
-        </Text>
-      </View>
-    );
-  };
+        ) : (
+          <View style={styles.placeholder} />
+        )}
 
-  return (
-    <View
-      style={[
-        isFullscreen
-          ? styles.fsContainer
-          : [styles.container, { width: SCREEN_W, height: VIDEO_H }],
-        style,
-      ]}
-    >
-      {resolvedUrl ? (
-        <Video
-          key={resolvedUrl}
-          ref={videoRef}
-          source={
-            isDash
-              ? { uri: resolvedUrl, type: "mpd", headers: HEADERS }
-              : { uri: resolvedUrl, headers: HEADERS }
-          }
-          style={StyleSheet.absoluteFill}
-          resizeMode="contain"
-          controls={false}
-          paused={!!(forcePaused || paused)}
-          onProgress={({
-            currentTime: ct,
-            seekableDuration: dur,
-            playableDuration: buf,
-          }) => {
-            setCurrentTime(ct);
-            if (dur > 0) setDuration(dur);
-            setBuffered(buf);
-            onTimeUpdate?.(ct);
-          }}
-          onLoad={() => {
-            if (initialTime && initialTime > 0) {
-              videoRef.current?.seek(initialTime);
-            }
-          }}
-        />
-      ) : (
-        <View style={styles.placeholder} />
-      )}
+        {isFullscreen && !!danmakus?.length && (
+          <DanmakuOverlay
+            danmakus={danmakus}
+            currentTime={currentTime}
+            screenWidth={SCREEN_W}
+            screenHeight={SCREEN_H}
+            visible={showDanmaku}
+          />
+        )}
 
-      {isFullscreen && !!danmakus?.length && (
-        <DanmakuOverlay
-          danmakus={danmakus}
-          currentTime={currentTime}
-          screenWidth={SCREEN_W}
-          screenHeight={SCREEN_H}
-          visible={showDanmaku}
-        />
-      )}
+        <TouchableWithoutFeedback onPress={handleTap}>
+          <View style={StyleSheet.absoluteFill} />
+        </TouchableWithoutFeedback>
 
-      <TouchableWithoutFeedback onPress={handleTap}>
-        <View style={StyleSheet.absoluteFill} />
-      </TouchableWithoutFeedback>
-
-      {showControls && (
-        <>
-          <LinearGradient
-            colors={["rgba(0,0,0,0.55)", "transparent"]}
-            style={styles.topBar}
-            pointerEvents="box-none"
-          >
-            {onMiniPlayer && (
-              <TouchableOpacity onPress={onMiniPlayer} style={styles.topBtn}>
-                <Ionicons
-                  name="tablet-portrait-outline"
-                  size={20}
-                  color="#fff"
-                />
-              </TouchableOpacity>
-            )}
-          </LinearGradient>
-
-          <TouchableOpacity
-            style={styles.centerBtn}
-            onPress={() => {
-              setPaused((p) => !p);
-              showAndReset();
-            }}
-          >
-            <View style={styles.centerBtnBg}>
-              <Ionicons
-                name={paused ? "play" : "pause"}
-                size={28}
-                color="#fff"
-              />
-            </View>
-          </TouchableOpacity>
-
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.7)"]}
-            style={styles.bottomBar}
-            pointerEvents="box-none"
-          >
-            <View
-              ref={trackRef}
-              style={styles.trackWrapper}
-              onLayout={measureTrack}
-              {...panResponder.panHandlers}
+        {showControls && (
+          <>
+          {/*  小窗口 */}
+            <LinearGradient
+              colors={["rgba(0,0,0,0.55)", "transparent"]}
+              style={styles.topBar}
+              pointerEvents="box-none"
             >
-              <View style={styles.track}>
-                <View
-                  style={[
-                    styles.trackLayer,
-                    {
-                      width: `${bufferedRatio * 100}%` as any,
-                      backgroundColor: "rgba(255,255,255,0.35)",
-                    },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.trackLayer,
-                    {
-                      width: `${progressRatio * 100}%` as any,
-                      backgroundColor: "#00AEEC",
-                    },
-                  ]}
-                />
-              </View>
-              {isSeeking && touchX !== null ? (
-                <View
-                  style={[
-                    styles.ball,
-                    styles.ballActive,
-                    { left: touchX - BALL_ACTIVE / 2 },
-                  ]}
-                />
-              ) : (
-                <View
-                  style={[
-                    styles.ball,
-                    { left: progressRatio * barWidthRef.current - BALL / 2 },
-                  ]}
-                />
-              )}
-            </View>
-            {/* Controls */}
+            </LinearGradient>
 
-            <View style={styles.ctrlRow}>
-              <TouchableOpacity
-                onPress={() => {
-                  setPaused((p) => !p);
-                  showAndReset();
-                }}
-                style={styles.ctrlBtn}
-              >
+            <TouchableOpacity
+              style={styles.centerBtn}
+              onPress={() => {
+                setPaused((p) => !p);
+                showAndReset();
+              }}
+            >
+              <View style={styles.centerBtnBg}>
                 <Ionicons
                   name={paused ? "play" : "pause"}
-                  size={16}
+                  size={28}
                   color="#fff"
                 />
-              </TouchableOpacity>
-              <Text style={styles.timeText}>
-                {formatDuration(Math.floor(currentTime))}
-              </Text>
-              <View style={{ flex: 1 }} />
-              <Text style={styles.timeText}>{formatDuration(duration)}</Text>
-              <TouchableOpacity
-                style={styles.ctrlBtn}
-                onPress={() => setShowQuality(true)}
+              </View>
+            </TouchableOpacity>
+
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.7)"]}
+              style={styles.bottomBar}
+              pointerEvents="box-none"
+            >
+              <View
+                ref={trackRef}
+                style={styles.trackWrapper}
+                onLayout={measureTrack}
+                {...panResponder.panHandlers}
               >
-                <Text style={styles.qualityText}>{currentDesc}</Text>
-              </TouchableOpacity>
-              {isFullscreen && (
+                <View style={styles.track}>
+                  <View
+                    style={[
+                      styles.trackLayer,
+                      {
+                        width: `${bufferedRatio * 100}%` as any,
+                        backgroundColor: "rgba(255,255,255,0.35)",
+                      },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.trackLayer,
+                      {
+                        width: `${progressRatio * 100}%` as any,
+                        backgroundColor: "#00AEEC",
+                      },
+                    ]}
+                  />
+                </View>
+                {isSeeking && touchX !== null ? (
+                  <View
+                    style={[
+                      styles.ball,
+                      styles.ballActive,
+                      { left: touchX - BALL_ACTIVE / 2 },
+                    ]}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.ball,
+                      { left: progressRatio * barWidthRef.current - BALL / 2 },
+                    ]}
+                  />
+                )}
+              </View>
+              {/* Controls */}
+
+              <View style={styles.ctrlRow}>
                 <TouchableOpacity
+                  onPress={() => {
+                    setPaused((p) => !p);
+                    showAndReset();
+                  }}
                   style={styles.ctrlBtn}
-                  onPress={() => setShowDanmaku((v) => !v)}
                 >
                   <Ionicons
-                    name={showDanmaku ? "chatbubbles" : "chatbubbles-outline"}
+                    name={paused ? "play" : "pause"}
                     size={16}
                     color="#fff"
                   />
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.ctrlBtn} onPress={onFullscreen}>
-                <Ionicons name="expand" size={16} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </>
-      )}
-
-      {renderThumbnail()}
-      {/* 选清晰度 */}
-      <Modal visible={showQuality} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          onPress={() => setShowQuality(false)}
-        >
-          <View style={styles.qualityList}>
-            <Text style={styles.qualityTitle}>选择清晰度</Text>
-            {qualities.map((q) => (
-              <TouchableOpacity
-                key={q.qn}
-                style={styles.qualityItem}
-                onPress={() => {
-                  setShowQuality(false);
-                  onQualityChange(q.qn);
-                  showAndReset();
-                }}
-              >
-                <Text
-                  style={[
-                    styles.qualityItemText,
-                    q.qn === currentQn && styles.qualityItemActive,
-                  ]}
-                >
-                  {q.desc}
+                <Text style={styles.timeText}>
+                  {formatDuration(Math.floor(currentTime))}
                 </Text>
-                {q.qn === currentQn && (
-                  <Ionicons name="checkmark" size={16} color="#00AEEC" />
+                <View style={{ flex: 1 }} />
+                <Text style={styles.timeText}>{formatDuration(duration)}</Text>
+                <TouchableOpacity
+                  style={styles.ctrlBtn}
+                  onPress={() => setShowQuality(true)}
+                >
+                  <Text style={styles.qualityText}>{currentDesc}</Text>
+                </TouchableOpacity>
+                {isFullscreen && (
+                  <TouchableOpacity
+                    style={styles.ctrlBtn}
+                    onPress={() => setShowDanmaku((v) => !v)}
+                  >
+                    <Ionicons
+                      name={showDanmaku ? "chatbubbles" : "chatbubbles-outline"}
+                      size={16}
+                      color="#fff"
+                    />
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </View>
-  );
-});
+                <TouchableOpacity style={styles.ctrlBtn} onPress={onFullscreen}>
+                  <Ionicons name="expand" size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+          </>
+        )}
+
+        {renderThumbnail()}
+        {/* 选清晰度 */}
+        <Modal visible={showQuality} transparent animationType="fade">
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            onPress={() => setShowQuality(false)}
+          >
+            <View style={styles.qualityList}>
+              <Text style={styles.qualityTitle}>选择清晰度</Text>
+              {qualities.map((q) => (
+                <TouchableOpacity
+                  key={q.qn}
+                  style={styles.qualityItem}
+                  onPress={() => {
+                    setShowQuality(false);
+                    onQualityChange(q.qn);
+                    showAndReset();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.qualityItemText,
+                      q.qn === currentQn && styles.qualityItemActive,
+                    ]}
+                  >
+                    {q.desc}
+                  </Text>
+                  {q.qn === currentQn && (
+                    <Ionicons name="checkmark" size={16} color="#00AEEC" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </View>
+    );
+  },
+);
 
 const styles = StyleSheet.create({
   container: { backgroundColor: "#000" },

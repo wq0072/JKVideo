@@ -123,6 +123,24 @@ export async function getPlayUrl(bvid: string, cid: number, qn = 64): Promise<Pl
   return res.data.data as PlayUrlResponse;
 }
 
+export async function getPlayUrlForDownload(
+  bvid: string,
+  cid: number,
+  qn = 64,
+): Promise<string> {
+  const res = await api.get('/x/player/playurl', {
+    params: { bvid, cid, qn, fnval: 0, platform: 'html5' },
+  });
+  if (res.data?.code !== 0) {
+    throw new Error(`API ${res.data?.code}: ${res.data?.message ?? '请求失败'}`);
+  }
+  const durlItem = res.data?.data?.durl?.[0];
+  // 优先用主 URL，主 URL 失效时退到 backup_url
+  const url: string | undefined = durlItem?.url || (durlItem?.backup_url as string[] | undefined)?.[0];
+  if (!url) throw new Error('无法获取下载地址（durl 为空）');
+  return url;
+}
+
 export async function getUserInfo(): Promise<{ face: string; uname: string; mid: number }> {
   const res = await api.get('/x/web-interface/nav');
   const { face, uname, mid } = res.data.data;

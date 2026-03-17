@@ -28,6 +28,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { VideoCard } from "../components/VideoCard";
 import { LiveCard } from "../components/LiveCard";
 import { LoginModal } from "../components/LoginModal";
+import { DownloadProgressBtn } from "../components/DownloadProgressBtn";
 import { useVideoList } from "../hooks/useVideoList";
 import { useLiveList } from "../hooks/useLiveList";
 import { useAuthStore } from "../store/authStore";
@@ -431,9 +432,7 @@ export default function HomeScreen() {
             <Ionicons name="search" size={14} color="#999" />
             <Text style={styles.searchPlaceholder}>搜索视频、UP主...</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.downloadBtn} activeOpacity={0.7}>
-            <Ionicons name="cloud-download-outline" size={24} color="#999" />
-          </TouchableOpacity>
+          <DownloadProgressBtn onPress={() => router.push('/downloads' as any)} />
         </Animated.View>
 
         <View style={styles.tabRow}>
@@ -536,11 +535,11 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 15,
-    fontWeight: "500",
+    fontWeight: "450",
     color: "#999",
   },
   tabTextActive: {
-    fontWeight: "700",
+    fontWeight: "500",
     color: "#00AEEC",
   },
   tabUnderline: {

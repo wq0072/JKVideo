@@ -11,14 +11,13 @@ interface Props {
   qualities: { qn: number; desc: string }[];
   currentQn: number;
   onQualityChange: (qn: number) => void;
-  onMiniPlayer?: () => void;
   bvid?: string;
   cid?: number;
   danmakus?: DanmakuItem[];
   onTimeUpdate?: (t: number) => void;
 }
 
-export function VideoPlayer({ playData, qualities, currentQn, onQualityChange, onMiniPlayer, bvid, cid, danmakus, onTimeUpdate }: Props) {
+export function VideoPlayer({ playData, qualities, currentQn, onQualityChange, bvid, cid, danmakus, onTimeUpdate }: Props) {
   const [fullscreen, setFullscreen] = useState(false);
   const { width, height } = useWindowDimensions();
   const VIDEO_HEIGHT = width * 0.5625;
@@ -80,7 +79,6 @@ export function VideoPlayer({ playData, qualities, currentQn, onQualityChange, o
         currentQn={currentQn}
         onQualityChange={onQualityChange}
         onFullscreen={handleEnterFullscreen}
-        onMiniPlayer={onMiniPlayer}
         bvid={bvid}
         cid={cid}
         isFullscreen={false}

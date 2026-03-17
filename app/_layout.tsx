@@ -4,13 +4,16 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View } from 'react-native';
 import { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
+import { useDownloadStore } from '../store/downloadStore';
 import { MiniPlayer } from '../components/MiniPlayer';
 
 export default function RootLayout() {
   const restore = useAuthStore(s => s.restore);
+  const loadDownloads = useDownloadStore(s => s.loadFromStorage);
 
   useEffect(() => {
     restore();
+    loadDownloads();
   }, []);
 
   return (
@@ -40,6 +43,14 @@ export default function RootLayout() {
             options={{
               animation: "slide_from_right",
               gestureEnabled: true,
+            }}
+          />
+          <Stack.Screen
+            name="downloads"
+            options={{
+              animation: "slide_from_right",
+              gestureEnabled: true,
+              gestureDirection: "horizontal",
             }}
           />
         </Stack>

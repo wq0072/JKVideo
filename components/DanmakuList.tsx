@@ -8,7 +8,6 @@ import {
   Animated,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { DanmakuItem } from "../services/types";
@@ -30,24 +29,10 @@ interface DisplayedDanmaku extends DanmakuItem {
   _fadeAnim: Animated.Value;
 }
 
-const MAX_DISPLAYED = 100;
 const DRIP_INTERVAL = 250;
 const FAST_DRIP_INTERVAL = 100;
 const QUEUE_FAST_THRESHOLD = 50;
 const SEEK_THRESHOLD = 2;
-
-// ─── 常见礼物 ──────────────────────────────────────────────────────────────────
-const COMMON_GIFTS = [
-  { name: "辣条",   icon: "🌶️", price: "1 银瓜子" },
-  { name: "小心心", icon: "💗", price: "5 银瓜子" },
-  { name: "打call",  icon: "📣", price: "500 银瓜子" },
-  { name: "干杯",   icon: "🍻", price: "1 电池" },
-  { name: "比心",   icon: "💕", price: "10 金瓜子" },
-  { name: "吃瓜",   icon: "🍉", price: "100 金瓜子" },
-  { name: "花式夸夸", icon: "🌸", price: "1000 金瓜子" },
-  { name: "告白气球", icon: "🎈", price: "5200 金瓜子" },
-  { name: "小电视飞船", icon: "🚀", price: "1245 电池" },
-];
 
 // ─── 舰长等级 ───────────────────────────────────────────────────────────────────
 const GUARD_LABELS: Record<number, { text: string; color: string }> = {
@@ -337,34 +322,6 @@ export default function DanmakuList({
         </View>
       )}
 
-      {/* 常见礼物栏 — 仅直播模式显示 */}
-      {hideHeader && visible && (
-        <View style={giftStyles.bar}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={giftStyles.scroll}
-          >
-            {COMMON_GIFTS.map((g) => {
-              const count = giftCounts?.[g.name] ?? 0;
-              return (
-                <TouchableOpacity key={g.name} style={giftStyles.item} activeOpacity={0.7}>
-                  <View style={giftStyles.iconWrap}>
-                    {count > 0 && (
-                      <View style={giftStyles.badge}>
-                        <Text style={giftStyles.badgeText}>+{count}</Text>
-                      </View>
-                    )}
-                    <Text style={giftStyles.icon}>{g.icon}</Text>
-                  </View>
-                  <Text style={giftStyles.name} numberOfLines={1}>{g.name}</Text>
-                  <Text style={giftStyles.price}>{g.price}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
     </View>
   );
 }

@@ -19,9 +19,9 @@ import { DanmakuItem } from "../../services/types";
 import DanmakuList from "../../components/DanmakuList";
 import { useVideoDetail } from "../../hooks/useVideoDetail";
 import { useComments } from "../../hooks/useComments";
-import { useVideoStore } from "../../store/videoStore";
 import { formatCount } from "../../utils/format";
 import { proxyImageUrl } from "../../utils/imageUrl";
+import { DownloadSheet } from "../../components/DownloadSheet";
 
 type Tab = "intro" | "comments" | "danmaku";
 
@@ -46,11 +46,7 @@ export default function VideoDetailScreen() {
   const [tab, setTab] = useState<Tab>("intro");
   const [danmakus, setDanmakus] = useState<DanmakuItem[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
-  const { setVideo, clearVideo } = useVideoStore();
-
-  useEffect(() => {
-    clearVideo();
-  }, [bvid]);
+  const [showDownload, setShowDownload] = useState(false);
 
   useEffect(() => {
     if (video?.aid) loadComments();
@@ -60,13 +56,6 @@ export default function VideoDetailScreen() {
     if (!video?.cid) return;
     getDanmaku(video.cid).then(setDanmakus);
   }, [video?.cid]);
-
-  function handleMiniPlayer() {
-    if (video) {
-      setVideo(bvid as string, video.title, video.pic);
-      router.back();
-    }
-  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -78,8 +67,11 @@ export default function VideoDetailScreen() {
         <Text style={styles.topTitle} numberOfLines={1}>
           {video?.title ?? "视频详情"}
         </Text>
-        <TouchableOpacity style={styles.miniBtn} onPress={handleMiniPlayer}>
-          <Ionicons name="copy-outline" size={22} color="#212121" />
+        <TouchableOpacity
+          style={styles.miniBtn}
+          onPress={() => setShowDownload(true)}
+        >
+          <Ionicons name="cloud-download-outline" size={22} color="#212121" />
         </TouchableOpacity>
       </View>
 
@@ -89,11 +81,19 @@ export default function VideoDetailScreen() {
         qualities={qualities}
         currentQn={currentQn}
         onQualityChange={changeQuality}
-        onMiniPlayer={handleMiniPlayer}
         bvid={bvid as string}
         cid={video?.cid}
         danmakus={danmakus}
         onTimeUpdate={setCurrentTime}
+      />
+      <DownloadSheet
+        visible={showDownload}
+        onClose={() => setShowDownload(false)}
+        bvid={bvid as string}
+        cid={video?.cid ?? 0}
+        title={video?.title ?? ""}
+        cover={video?.pic ?? ""}
+        qualities={qualities}
       />
 
       {/* TabBar — sits directly below player, always visible once video loads */}
