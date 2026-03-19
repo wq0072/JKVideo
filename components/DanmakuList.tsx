@@ -20,6 +20,7 @@ interface Props {
   onToggle: () => void;
   style?: object | object[];
   hideHeader?: boolean;
+  isLive?: boolean;
   maxItems?: number;
   giftCounts?: Record<string, number>;
 }
@@ -60,6 +61,7 @@ export default function DanmakuList({
   onToggle,
   style,
   hideHeader,
+  isLive,
   maxItems = 100,
   giftCounts,
 }: Props) {
@@ -90,7 +92,7 @@ export default function DanmakuList({
       return;
     }
 
-    if (hideHeader) {
+    if (isLive) {
       const newStart = processedIndexRef.current;
       if (danmakus.length > newStart) {
         queueRef.current.push(...danmakus.slice(newStart));
@@ -105,11 +107,11 @@ export default function DanmakuList({
     setDisplayedItems([]);
     setUnseenCount(0);
     isAtBottomRef.current = true;
-  }, [danmakus, hideHeader]);
+  }, [danmakus, isLive]);
 
   // Watch currentTime — only used in video mode
   useEffect(() => {
-    if (!visible || danmakus.length === 0 || hideHeader) return;
+    if (danmakus.length === 0 || isLive) return;
 
     const prevTime = lastTimeRef.current;
     lastTimeRef.current = currentTime;
@@ -140,12 +142,10 @@ export default function DanmakuList({
       i++;
     }
     processedIndexRef.current = i;
-  }, [currentTime, danmakus, visible, hideHeader]);
+  }, [currentTime, danmakus, isLive]);
 
-  // Drip interval
+  // Drip interval — always running so queue is consumed even when tab is hidden
   useEffect(() => {
-    if (!visible) return;
-
     const id = setInterval(
       () => {
         if (queueRef.current.length === 0) return;
@@ -185,7 +185,7 @@ export default function DanmakuList({
     );
 
     return () => clearInterval(id);
-  }, [visible]);
+  }, []);
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -297,9 +297,9 @@ export default function DanmakuList({
             ref={flatListRef}
             data={displayedItems}
             keyExtractor={keyExtractor}
-            renderItem={hideHeader ? renderLiveItem : renderVideoItem}
-            style={hideHeader ? liveStyles.list : styles.list}
-            contentContainerStyle={hideHeader ? liveStyles.listContent : styles.listContent}
+            renderItem={isLive ? renderLiveItem : renderVideoItem}
+            style={isLive ? liveStyles.list : styles.list}
+            contentContainerStyle={isLive ? liveStyles.listContent : styles.listContent}
             onScroll={handleScroll}
             onScrollBeginDrag={handleScrollBeginDrag}
             scrollEventThrottle={16}

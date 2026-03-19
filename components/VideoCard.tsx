@@ -10,7 +10,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import type { VideoItem } from "../services/types";
 import { formatCount, formatDuration } from "../utils/format";
-import { proxyImageUrl } from "../utils/imageUrl";
+import { coverImageUrl } from "../utils/imageUrl";
+import { useSettingsStore } from "../store/settingsStore";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = (width - 14) / 2;
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export const VideoCard = React.memo(function VideoCard({ item, onPress }: Props) {
+  const coverQuality = useSettingsStore(s => s.coverQuality);
   return (
     <TouchableOpacity
       style={styles.card}
@@ -29,7 +31,7 @@ export const VideoCard = React.memo(function VideoCard({ item, onPress }: Props)
     >
       <View style={styles.thumbContainer}>
         <Image
-          source={{ uri: proxyImageUrl(item.pic) }}
+          source={{ uri: coverImageUrl(item.pic, coverQuality) }}
           style={styles.thumb}
           resizeMode="cover"
         />

@@ -20,7 +20,8 @@ import Video, { VideoRef } from "react-native-video";
 import { Ionicons } from "@expo/vector-icons";
 import { buildDashMpdUri } from "../utils/dash";
 import { getPlayUrl, getVideoDetail } from "../services/bilibili";
-import { proxyImageUrl } from "../utils/imageUrl";
+import { coverImageUrl } from "../utils/imageUrl";
+import { useSettingsStore } from "../store/settingsStore";
 import { formatCount, formatDuration } from "../utils/format";
 import type { VideoItem } from "../services/types";
 
@@ -54,6 +55,7 @@ export const BigVideoCard = React.memo(function BigVideoCard({
   onPress,
 }: Props) {
   const { width: SCREEN_W } = useWindowDimensions();
+  const coverQuality = useSettingsStore(s => s.coverQuality);
   const THUMB_H = SCREEN_W * 0.5625;
   const mediaDimensions = { width: SCREEN_W - 8, height: THUMB_H };
 
@@ -258,7 +260,7 @@ export const BigVideoCard = React.memo(function BigVideoCard({
           pointerEvents="none"
         >
           <Image
-            source={{ uri: proxyImageUrl(item.pic) }}
+            source={{ uri: coverImageUrl(item.pic, coverQuality) }}
             style={mediaDimensions}
             resizeMode="cover"
           />

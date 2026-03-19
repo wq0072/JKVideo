@@ -5,15 +5,18 @@ import { View } from 'react-native';
 import { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useDownloadStore } from '../store/downloadStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { MiniPlayer } from '../components/MiniPlayer';
 
 export default function RootLayout() {
   const restore = useAuthStore(s => s.restore);
   const loadDownloads = useDownloadStore(s => s.loadFromStorage);
+  const restoreSettings = useSettingsStore(s => s.restore);
 
   useEffect(() => {
     restore();
     loadDownloads();
+    restoreSettings();
   }, []);
 
   return (
@@ -47,6 +50,14 @@ export default function RootLayout() {
           />
           <Stack.Screen
             name="downloads"
+            options={{
+              animation: "slide_from_right",
+              gestureEnabled: true,
+              gestureDirection: "horizontal",
+            }}
+          />
+          <Stack.Screen
+            name="settings"
             options={{
               animation: "slide_from_right",
               gestureEnabled: true,

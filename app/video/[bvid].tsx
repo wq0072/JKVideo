@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
-  ScrollView,
   FlatList,
   StyleSheet,
   TouchableOpacity,
@@ -19,7 +18,8 @@ import { DanmakuItem } from "../../services/types";
 import DanmakuList from "../../components/DanmakuList";
 import { useVideoDetail } from "../../hooks/useVideoDetail";
 import { useComments } from "../../hooks/useComments";
-import { formatCount } from "../../utils/format";
+import { useRelatedVideos } from "../../hooks/useRelatedVideos";
+import { formatCount, formatDuration } from "../../utils/format";
 import { proxyImageUrl } from "../../utils/imageUrl";
 import { DownloadSheet } from "../../components/DownloadSheet";
 
@@ -47,6 +47,15 @@ export default function VideoDetailScreen() {
   const [danmakus, setDanmakus] = useState<DanmakuItem[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [showDownload, setShowDownload] = useState(false);
+  const {
+    videos: relatedVideos,
+    loading: relatedLoading,
+    load: loadRelated,
+  } = useRelatedVideos();
+
+  useEffect(() => {
+    loadRelated();
+  }, []);
 
   useEffect(() => {
     if (video?.aid) loadComments();
@@ -141,110 +150,185 @@ export default function VideoDetailScreen() {
       {videoLoading ? (
         <ActivityIndicator style={styles.loader} color="#00AEEC" />
       ) : video ? (
-        tab === "intro" ? (
-          // 简介：视频信息 + 合集 + 简介文本
-          <ScrollView
-            style={styles.tabScroll}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.upRow}>
-              <Image
-                source={{ uri: proxyImageUrl(video.owner.face) }}
-                style={styles.avatar}
-              />
-              <Text style={styles.upName}>{video.owner.name}</Text>
-              <TouchableOpacity style={styles.followBtn}>
-                <Text style={styles.followTxt}>+ 关注</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.titleSection}>
-              <Text style={styles.title}>{video.title}</Text>
-              <View style={styles.statsRow}>
-                <StatBadge icon="play" count={video.stat.view} />
-                <StatBadge icon="heart" count={video.stat.like} />
-                <StatBadge icon="star" count={video.stat.favorite} />
-                <StatBadge icon="chatbubble" count={video.stat.reply} />
-              </View>
-            </View>
-            {video.ugc_season && (
-              <SeasonSection
-                season={video.ugc_season}
-                currentBvid={bvid as string}
-                onEpisodePress={(epBvid) => router.replace(`/video/${epBvid}`)}
-              />
-            )}
-            <View style={styles.descBox}>
-              <Text style={styles.descText}>{video.desc || "暂无简介"}</Text>
-            </View>
-          </ScrollView>
-        ) : tab === "danmaku" ? (
+        <>
+          {tab === "intro" && (
+            <FlatList<import("../../services/types").VideoItem>
+              style={styles.tabScroll}
+              data={relatedVideos}
+              keyExtractor={(item) => item.bvid}
+              showsVerticalScrollIndicator={false}
+              onEndReached={() => {
+                if (!relatedLoading) loadRelated();
+              }}
+              onEndReachedThreshold={0.5}
+              ListHeaderComponent={
+                <>
+                  <View style={styles.upRow}>
+                    <Image
+                      source={{ uri: proxyImageUrl(video.owner.face) }}
+                      style={styles.avatar}
+                    />
+                    <Text style={styles.upName}>{video.owner.name}</Text>
+                    <TouchableOpacity style={styles.followBtn}>
+                      <Text style={styles.followTxt}>+ 关注</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.titleSection}>
+                    <Text style={styles.title}>{video.title}</Text>
+                    <View style={styles.statsRow}>
+                      <StatBadge icon="play" count={video.stat.view} />
+                      <StatBadge icon="heart" count={video.stat.like} />
+                      <StatBadge icon="star" count={video.stat.favorite} />
+                      <StatBadge icon="chatbubble" count={video.stat.reply} />
+                    </View>
+                  </View>
+                  {video.ugc_season && (
+                    <SeasonSection
+                      season={video.ugc_season}
+                      currentBvid={bvid as string}
+                      onEpisodePress={(epBvid) =>
+                        router.replace(`/video/${epBvid}`)
+                      }
+                    />
+                  )}
+                  <View style={styles.descBox}>
+                    <Text style={styles.descText}>
+                      {video.desc || "暂无简介"}
+                    </Text>
+                  </View>
+                  <View style={styles.relatedHeader}>
+                    <Text style={styles.relatedHeaderText}>推荐视频</Text>
+                  </View>
+                </>
+              }
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.relatedCard}
+                  onPress={() => router.push(`/video/${item.bvid}` as any)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.relatedThumbWrap}>
+                    <Image
+                      source={{ uri: proxyImageUrl(item.pic) }}
+                      style={styles.relatedThumb}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.relatedDuration}>
+                      <Text style={styles.relatedDurationText}>
+                        {formatDuration(item.duration)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.relatedInfo}>
+                    <Text style={styles.relatedTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text style={styles.relatedOwner} numberOfLines={1}>
+                        {item.owner?.name ?? ""}
+                      </Text>
+                      <Text style={styles.relatedView}>
+                        {formatCount(item.stat?.view ?? 0)} 播放
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                !relatedLoading ? (
+                  <ActivityIndicator style={styles.loader} color="#00AEEC" />
+                ) : null
+              }
+              ListFooterComponent={
+                relatedLoading ? (
+                  <ActivityIndicator style={styles.loader} color="#00AEEC" />
+                ) : null
+              }
+            />
+          )}
+
+          {tab === "comments" && (
+            <FlatList
+              style={styles.tabScroll}
+              data={comments}
+              keyExtractor={(c) => String(c.rpid)}
+              renderItem={({ item }) => <CommentItem item={item} />}
+              onEndReached={() => {
+                if (cmtHasMore && !cmtLoading) loadComments();
+              }}
+              onEndReachedThreshold={0.3}
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={
+                <View style={styles.sortRow}>
+                  <Text style={styles.sortLabel}>排序</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.sortBtn,
+                      commentSort === 2 && styles.sortBtnActive,
+                    ]}
+                    onPress={() => setCommentSort(2)}
+                  >
+                    <Text
+                      style={[
+                        styles.sortBtnTxt,
+                        commentSort === 2 && styles.sortBtnTxtActive,
+                      ]}
+                    >
+                      热门
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.sortBtn,
+                      commentSort === 0 && styles.sortBtnActive,
+                    ]}
+                    onPress={() => setCommentSort(0)}
+                  >
+                    <Text
+                      style={[
+                        styles.sortBtnTxt,
+                        commentSort === 0 && styles.sortBtnTxtActive,
+                      ]}
+                    >
+                      最新
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              }
+              ListFooterComponent={
+                cmtLoading ? (
+                  <ActivityIndicator style={styles.loader} color="#00AEEC" />
+                ) : !cmtHasMore && comments.length > 0 ? (
+                  <Text style={styles.emptyTxt}>已加载全部评论</Text>
+                ) : null
+              }
+              ListEmptyComponent={
+                !cmtLoading ? (
+                  <Text style={styles.emptyTxt}>暂无评论</Text>
+                ) : null
+              }
+            />
+          )}
+
+          {/* 弹幕面板：始终挂载，切 tab 时用 display:none 隐藏而不卸载 */}
           <DanmakuList
             danmakus={danmakus}
             currentTime={currentTime}
-            visible={true}
+            visible={tab === "danmaku"}
             onToggle={() => {}}
-            style={styles.danmakuTab}
+            hideHeader={true}
+            style={[
+              styles.danmakuTab,
+              tab !== "danmaku" && { display: "none" },
+            ]}
           />
-        ) : (
-          <FlatList
-            style={styles.tabScroll}
-            data={comments}
-            keyExtractor={(c) => String(c.rpid)}
-            renderItem={({ item }) => <CommentItem item={item} />}
-            onEndReached={() => {
-              if (cmtHasMore && !cmtLoading) loadComments();
-            }}
-            onEndReachedThreshold={0.3}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={
-              <View style={styles.sortRow}>
-                <Text style={styles.sortLabel}>排序</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.sortBtn,
-                    commentSort === 2 && styles.sortBtnActive,
-                  ]}
-                  onPress={() => setCommentSort(2)}
-                >
-                  <Text
-                    style={[
-                      styles.sortBtnTxt,
-                      commentSort === 2 && styles.sortBtnTxtActive,
-                    ]}
-                  >
-                    热门
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.sortBtn,
-                    commentSort === 0 && styles.sortBtnActive,
-                  ]}
-                  onPress={() => setCommentSort(0)}
-                >
-                  <Text
-                    style={[
-                      styles.sortBtnTxt,
-                      commentSort === 0 && styles.sortBtnTxtActive,
-                    ]}
-                  >
-                    最新
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            }
-            ListFooterComponent={
-              cmtLoading ? (
-                <ActivityIndicator style={styles.loader} color="#00AEEC" />
-              ) : !cmtHasMore && comments.length > 0 ? (
-                <Text style={styles.emptyTxt}>已加载全部评论</Text>
-              ) : null
-            }
-            ListEmptyComponent={
-              !cmtLoading ? <Text style={styles.emptyTxt}>暂无评论</Text> : null
-            }
-          />
-        )
+        </>
       ) : null}
     </SafeAreaView>
   );
@@ -444,6 +528,55 @@ const styles = StyleSheet.create({
   descText: { fontSize: 14, color: "#555", lineHeight: 22 },
   danmakuTab: { flex: 1 },
   emptyTxt: { textAlign: "center", color: "#bbb", padding: 30 },
+  relatedHeader: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#f0f0f0",
+    backgroundColor: "#f4f4f4",
+  },
+  relatedHeaderText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: "#212121",
+  },
+  relatedCard: {
+    flexDirection: "row",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#fff",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#f0f0f0",
+    gap: 10,
+  },
+  relatedThumbWrap: {
+    position: "relative",
+    width: 120,
+    height: 68,
+    borderRadius: 4,
+    overflow: "hidden",
+    backgroundColor: "#eee",
+    flexShrink: 0,
+  },
+  relatedThumb: { width: 120, height: 68 },
+  relatedDuration: {
+    position: "absolute",
+    bottom: 3,
+    right: 3,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  relatedDurationText: { color: "#fff", fontSize: 10 },
+  relatedInfo: {
+    flex: 1,
+    justifyContent: "space-between",
+    paddingVertical: 2,
+  },
+  relatedTitle: { fontSize: 13, color: "#212121", lineHeight: 18 },
+  relatedOwner: { fontSize: 12, color: "#999" },
+  relatedView: { fontSize: 11, color: "#bbb" },
   sortRow: {
     flexDirection: "row",
     alignItems: "center",

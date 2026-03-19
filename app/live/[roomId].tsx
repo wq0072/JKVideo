@@ -155,6 +155,7 @@ export default function LiveDetailScreen() {
             onToggle={() => {}}
             style={[styles.danmakuFull, tab !== "danmaku" && styles.hidden]}
             hideHeader
+            isLive
             maxItems={500}
             giftCounts={giftCounts}
           />

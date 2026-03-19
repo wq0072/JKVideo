@@ -76,7 +76,7 @@ export default function HomeScreen() {
     load: liveLoad,
     refresh: liveRefresh,
   } = useLiveList();
-  const { isLoggedIn, face, logout } = useAuthStore();
+  const { isLoggedIn, face } = useAuthStore();
   const [showLogin, setShowLogin] = useState(false);
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<TabKey>("hot");
@@ -411,7 +411,7 @@ export default function HomeScreen() {
           <View style={styles.headerRight}>
             <TouchableOpacity
               style={styles.headerBtn}
-              onPress={() => (isLoggedIn ? logout() : setShowLogin(true))}
+              onPress={() => (isLoggedIn ? router.push('/settings' as any) : setShowLogin(true))}
             >
               {isLoggedIn && face ? (
                 <Image source={{ uri: face }} style={styles.userAvatar} />

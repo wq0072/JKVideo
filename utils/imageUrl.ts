@@ -15,3 +15,11 @@ export function proxyImageUrl(url: string): string {
   // Native: force HTTPS so Release APK doesn't block cleartext HTTP
   return url.replace(/^http:\/\//, 'https://');
 }
+
+export function coverImageUrl(url: string, quality: 'hd' | 'normal'): string {
+  const base = proxyImageUrl(url);
+  if (quality === 'normal' && base) {
+    return base.replace(/(@[\w]+)?$/, '@320w_180h_1c.webp');
+  }
+  return base;
+}
