@@ -11,6 +11,8 @@ jobs:
       issues: write
     steps:
       - uses: actions/github-script@v7
+        env:
+          ABUSIVE_WORDS: ${{ secrets.ABUSIVE_WORDS }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -19,13 +21,9 @@ jobs:
             const body  = (context.payload.issue.body  || '').toLowerCase();
             const text  = title + ' ' + body;
 
-            // --- 第一层：攻击性内容 ---
-            const abusiveWords = [
-              '傻逼','sb','垃圾','废物','狗屎','他妈','滚','草泥马',
-              'fuck','shit','操你','你妈','去死','蠢货','弱智','脑残',
-              '煞笔','白痴','混蛋','烂货','简历','个人信息','B站','假','找工作','金沙'
-            ];
-            const isAbusive = abusiveWords.some(w => text.includes(w));
+            // --- 第一层：攻击性内容（词库存于 Secret: ABUSIVE_WORDS，逗号分隔）---
+            const abusiveWords = (process.env.ABUSIVE_WORDS || '').split(',').map(w => w.trim()).filter(Boolean);
+            const isAbusive = abusiveWords.some(w => w && text.includes(w.toLowerCase()));
 
             if (isAbusive) {
               await github.rest.issues.createComment({
