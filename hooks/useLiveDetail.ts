@@ -53,7 +53,7 @@ export function useLiveDetail(roomId: number) {
   const changeQuality = useCallback(async (qn: number) => {
     try {
       const stream = await getLiveStreamUrl(roomId, qn);
-      setState(prev => ({ ...prev, stream }));
+      setState(prev => ({ ...prev, stream: { ...stream, qn } }));
     } catch { /* ignore */ }
   }, [roomId]);
 

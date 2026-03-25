@@ -211,58 +211,81 @@ export default function DanmakuList({
   }, []);
 
   // ─── Live mode render (B站-style chat) ─────────────────────────────────────
-  const renderLiveItem = useCallback(({ item }: { item: DisplayedDanmaku }) => {
-    const guard = item.guardLevel ? GUARD_LABELS[item.guardLevel] : null;
-    const timeStr = formatLiveTime(item.timeline);
-    return (
-      <Animated.View style={[liveStyles.row, { opacity: item._fadeAnim, borderBottomColor: theme.border }]}>
-        {timeStr ? (
-          <Text style={liveStyles.time}>{timeStr}</Text>
-        ) : null}
-        <View style={liveStyles.msgBody}>
-          {guard && (
-            <View style={[liveStyles.guardTag, { backgroundColor: guard.color }]}>
-              <Text style={liveStyles.guardTagText}>{guard.text}</Text>
-            </View>
-          )}
-          {item.isAdmin && (
-            <View style={[liveStyles.guardTag, { backgroundColor: "#e53935" }]}>
-              <Text style={liveStyles.guardTagText}>房管</Text>
-            </View>
-          )}
-          {item.medalLevel != null && item.medalName && (
-            <View style={liveStyles.medalTag}>
-              <Text style={liveStyles.medalName}>{item.medalName}</Text>
-              <View style={liveStyles.medalLvBox}>
-                <Text style={liveStyles.medalLv}>{item.medalLevel}</Text>
+  const renderLiveItem = useCallback(
+    ({ item }: { item: DisplayedDanmaku }) => {
+      const guard = item.guardLevel ? GUARD_LABELS[item.guardLevel] : null;
+      const timeStr = formatLiveTime(item.timeline);
+      return (
+        <Animated.View
+          style={[
+            liveStyles.row,
+            { opacity: item._fadeAnim, borderBottomColor: theme.border },
+          ]}
+        >
+          {timeStr ? <Text style={liveStyles.time}>{timeStr}</Text> : null}
+          <View style={liveStyles.msgBody}>
+            {guard && (
+              <View
+                style={[liveStyles.guardTag, { backgroundColor: guard.color }]}
+              >
+                <Text style={liveStyles.guardTagText}>{guard.text}</Text>
               </View>
-            </View>
-          )}
-          <Text style={liveStyles.uname} numberOfLines={1}>
-            {item.uname ?? "匿名"}
-          </Text>
-          <Text style={liveStyles.colon}>：</Text>
-          <Text style={[liveStyles.text, { color: theme.text }]} numberOfLines={2}>
-            {item.text}
-          </Text>
-        </View>
-      </Animated.View>
-    );
-  }, [theme]);
+            )}
+            {item.isAdmin && (
+              <View
+                style={[liveStyles.guardTag, { backgroundColor: "#e53935" }]}
+              >
+                <Text style={liveStyles.guardTagText}>房管</Text>
+              </View>
+            )}
+            {item.medalLevel != null && item.medalName && (
+              <View style={liveStyles.medalTag}>
+                <Text style={liveStyles.medalName}>{item.medalName}</Text>
+                <View style={liveStyles.medalLvBox}>
+                  <Text style={liveStyles.medalLv}>{item.medalLevel}</Text>
+                </View>
+              </View>
+            )}
+            <Text style={liveStyles.uname} numberOfLines={1}>
+              {item.uname ?? "匿名"}
+            </Text>
+            <Text style={liveStyles.colon}>：</Text>
+            <Text
+              style={[liveStyles.text, { color: theme.text }]}
+              numberOfLines={2}
+            >
+              {item.text}
+            </Text>
+          </View>
+        </Animated.View>
+      );
+    },
+    [theme],
+  );
 
   // ─── Video mode render (original bubble) ───────────────────────────────────
-  const renderVideoItem = useCallback(({ item }: { item: DisplayedDanmaku }) => {
-    const dotColor = danmakuColorToCss(item.color);
-    return (
-      <Animated.View style={[styles.bubble, { opacity: item._fadeAnim, backgroundColor: theme.bg }]}>
-        <View style={[styles.colorDot, { backgroundColor: dotColor }]} />
-        <Text style={[styles.bubbleText, { color: theme.text }]} numberOfLines={3}>
-          {item.text}
-        </Text>
-        <Text style={styles.timestamp}>{formatTimestamp(item.time)}</Text>
-      </Animated.View>
-    );
-  }, [theme]);
+  const renderVideoItem = useCallback(
+    ({ item }: { item: DisplayedDanmaku }) => {
+      const dotColor = danmakuColorToCss(item.color);
+      return (
+        <Animated.View
+          style={[
+            styles.bubble,
+            { opacity: item._fadeAnim, backgroundColor: theme.bg },
+          ]}
+        >
+          <Text
+            style={[styles.bubbleText, { color: dotColor }]}
+            numberOfLines={3}
+          >
+            {item.text}
+          </Text>
+          <Text style={styles.timestamp}>{formatTimestamp(item.time)}</Text>
+        </Animated.View>
+      );
+    },
+    [theme],
+  );
 
   const keyExtractor = useCallback(
     (item: DisplayedDanmaku) => String(item._key),
@@ -270,7 +293,13 @@ export default function DanmakuList({
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.card, borderTopColor: theme.border }, style]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: theme.card, borderTopColor: theme.border },
+        style,
+      ]}
+    >
       {!hideHeader && (
         <TouchableOpacity
           style={styles.header}
@@ -300,8 +329,13 @@ export default function DanmakuList({
             data={displayedItems}
             keyExtractor={keyExtractor}
             renderItem={isLive ? renderLiveItem : renderVideoItem}
-            style={[isLive ? liveStyles.list : styles.list, { backgroundColor: theme.bg }]}
-            contentContainerStyle={isLive ? liveStyles.listContent : styles.listContent}
+            style={[
+              isLive ? liveStyles.list : styles.list,
+              { backgroundColor: theme.card },
+            ]}
+            contentContainerStyle={
+              isLive ? liveStyles.listContent : styles.listContent
+            }
             onScroll={handleScroll}
             onScrollBeginDrag={handleScrollBeginDrag}
             scrollEventThrottle={16}
@@ -323,7 +357,6 @@ export default function DanmakuList({
           )}
         </View>
       )}
-
     </View>
   );
 }
@@ -369,13 +402,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginVertical: 2,
     gap: 8,
-  },
-  colorDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 6,
-    flexShrink: 0,
   },
   bubbleText: {
     flex: 1,
@@ -425,8 +451,6 @@ const liveStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     paddingVertical: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#f0f0f2",
   },
   time: {
     fontSize: 10,

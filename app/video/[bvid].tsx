@@ -13,7 +13,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { VideoPlayer } from "../../components/VideoPlayer";
 import { CommentItem } from "../../components/CommentItem";
-import { getDanmaku } from "../../services/bilibili";
+import { getDanmaku, getUploaderStat } from "../../services/bilibili";
 import { DanmakuItem } from "../../services/types";
 import DanmakuList from "../../components/DanmakuList";
 import { useVideoDetail } from "../../hooks/useVideoDetail";
@@ -49,11 +49,12 @@ export default function VideoDetailScreen() {
   const [danmakus, setDanmakus] = useState<DanmakuItem[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [showDownload, setShowDownload] = useState(false);
+  const [uploaderStat, setUploaderStat] = useState<{ follower: number; archiveCount: number } | null>(null);
   const {
     videos: relatedVideos,
     loading: relatedLoading,
     load: loadRelated,
-  } = useRelatedVideos();
+  } = useRelatedVideos(bvid as string);
 
   useEffect(() => {
     loadRelated();
@@ -67,6 +68,11 @@ export default function VideoDetailScreen() {
     if (!video?.cid) return;
     getDanmaku(video.cid).then(setDanmakus);
   }, [video?.cid]);
+
+  useEffect(() => {
+    if (!video?.owner?.mid) return;
+    getUploaderStat(video.owner.mid).then(setUploaderStat).catch(() => {});
+  }, [video?.owner?.mid]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.card }]}>
@@ -178,10 +184,6 @@ export default function VideoDetailScreen() {
               data={relatedVideos}
               keyExtractor={(item) => item.bvid}
               showsVerticalScrollIndicator={false}
-              onEndReached={() => {
-                if (!relatedLoading) loadRelated();
-              }}
-              onEndReachedThreshold={0.5}
               ListHeaderComponent={
                 <>
                   <View style={styles.upRow}>
@@ -189,9 +191,16 @@ export default function VideoDetailScreen() {
                       source={{ uri: proxyImageUrl(video.owner.face) }}
                       style={styles.avatar}
                     />
-                    <Text style={[styles.upName, { color: theme.text }]}>
-                      {video.owner.name}
-                    </Text>
+                    <View style={styles.upInfo}>
+                      <Text style={[styles.upName, { color: theme.text }]}>
+                        {video.owner.name}
+                      </Text>
+                      {uploaderStat && (
+                        <Text style={styles.upStat}>
+                          {formatCount(uploaderStat.follower)}粉丝 · {formatCount(uploaderStat.archiveCount)}视频
+                        </Text>
+                      )}
+                    </View>
                     <TouchableOpacity style={styles.followBtn}>
                       <Text style={styles.followTxt}>+ 关注</Text>
                     </TouchableOpacity>
@@ -249,7 +258,7 @@ export default function VideoDetailScreen() {
                       borderBottomColor: theme.border,
                     },
                   ]}
-                  onPress={() => router.push(`/video/${item.bvid}` as any)}
+                  onPress={() => router.replace(`/video/${item.bvid}` as any)}
                   activeOpacity={0.85}
                 >
                   <View
@@ -321,7 +330,6 @@ export default function VideoDetailScreen() {
                 <View
                   style={[styles.sortRow, { borderBottomColor: theme.border }]}
                 >
-                  <Text style={styles.sortLabel}>排序</Text>
                   <TouchableOpacity
                     style={[
                       styles.sortBtn,
@@ -447,7 +455,7 @@ function SeasonSection({
         contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}
         getItemLayout={(_data, index) => ({
           length: 130,
-          offset: 12 + index * 140,
+          offset: 12 + index * 130,
           index,
         })}
         onScrollToIndexFailed={() => {}}
@@ -528,8 +536,10 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     paddingTop: 12,
   },
-  avatar: { width: 48, height: 48, borderRadius: 30, marginRight: 10 },
-  upName: { flex: 1, fontSize: 14, fontWeight: "500" },
+  avatar: { width: 40, height: 40, borderRadius: 30, marginRight: 10 },
+  upInfo: { flex: 1, justifyContent: "center" },
+  upName: { fontSize: 14, fontWeight: "500" },
+  upStat: { fontSize: 11, color: "#999", marginTop: 2 },
   followBtn: {
     backgroundColor: "#00AEEC",
     paddingHorizontal: 10,
@@ -570,11 +580,12 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingLeft: 3,
   },
   tabItem: {
-    flex: 1,
     alignItems: "center",
     paddingVertical: 12,
+    paddingHorizontal: 12,
     position: "relative",
   },
   tabLabel: { fontSize: 13 },
@@ -593,7 +604,7 @@ const styles = StyleSheet.create({
   danmakuTab: { flex: 1 },
   emptyTxt: { textAlign: "center", color: "#bbb", padding: 30 },
   relatedHeader: {
-    paddingLeft: 12,
+    paddingLeft: 13,
     paddingBottom: 8,
     paddingTop: 8,
   },
@@ -643,15 +654,13 @@ const styles = StyleSheet.create({
     gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  sortLabel: { fontSize: 13, color: "#999", marginRight: 4 },
   sortBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 3,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 16,
+    backgroundColor: "#f0f0f0",
   },
-  sortBtnActive: { borderColor: "#00AEEC", backgroundColor: "#e8f7fd" },
-  sortBtnTxt: { fontSize: 12, color: "#666" },
-  sortBtnTxtActive: { color: "#00AEEC", fontWeight: "600" as const },
+  sortBtnActive: { backgroundColor: "#00AEEC" },
+  sortBtnTxt: { fontSize: 13, color: "#333", fontWeight: "500" },
+  sortBtnTxtActive: { color: "#fff", fontWeight: "600" as const },
 });

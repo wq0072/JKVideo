@@ -114,6 +114,12 @@ export async function getVideoDetail(bvid: string): Promise<VideoItem> {
   return res.data.data as VideoItem;
 }
 
+export async function getVideoRelated(bvid: string): Promise<VideoItem[]> {
+  const res = await api.get('/x/web-interface/archive/related', { params: { bvid } });
+  const items: any[] = res.data.data ?? [];
+  return items as VideoItem[];
+}
+
 export async function getPlayUrl(bvid: string, cid: number, qn = 64): Promise<PlayUrlResponse> {
   const isAndroid = Platform.OS === 'android';
   // 1488 = 16(DASH)|64(HDR)|128(4K)|256(杜比全景声)|1024(杜比视界)
@@ -141,6 +147,15 @@ export async function getPlayUrlForDownload(
   const url: string | undefined = durlItem?.url || (durlItem?.backup_url as string[] | undefined)?.[0];
   if (!url) throw new Error('无法获取下载地址（durl 为空）');
   return url;
+}
+
+export async function getUploaderStat(mid: number): Promise<{ follower: number; archiveCount: number }> {
+  const res = await api.get('/x/web-interface/card', { params: { mid } });
+  const data = res.data.data ?? {};
+  return {
+    follower: data.follower ?? 0,
+    archiveCount: data.archive_count ?? 0,
+  };
 }
 
 export async function getUserInfo(): Promise<{ face: string; uname: string; mid: number }> {
@@ -286,7 +301,9 @@ export async function getLiveStreamUrl(roomId: number, qn = 10000): Promise<Live
     const playurl = res.data?.data?.playurl_info?.playurl;
     const streams: any[] = playurl?.stream ?? [];
     const gQnDesc: any[] = playurl?.g_qn_desc ?? [];
-    const qualities = gQnDesc.map((q: any) => ({ qn: q.qn as number, desc: q.desc as string }));
+    const qualities = gQnDesc
+      .map((q: any) => ({ qn: q.qn as number, desc: q.desc as string }))
+      .filter(q => q.qn <= 10000);
 
     let hlsUrl = '';
     let flvUrl = '';

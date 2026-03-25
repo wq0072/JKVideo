@@ -1,29 +1,26 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
-import { getRecommendFeed } from '../services/bilibili';
+import { useState, useCallback, useRef } from 'react';
+import { getVideoRelated } from '../services/bilibili';
 import type { VideoItem } from '../services/types';
 
-export function useRelatedVideos() {
-  const [pages, setPages] = useState<VideoItem[][]>([]);
+export function useRelatedVideos(bvid: string) {
+  const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(false);
   const loadingRef = useRef(false);
-  const freshIdxRef = useRef(0);
 
   const load = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
     try {
-      const data = await getRecommendFeed(freshIdxRef.current);
-      setPages(prev => [...prev, data]);
-      freshIdxRef.current += 1;
+      const data = await getVideoRelated(bvid);
+      setVideos(data);
     } catch (e) {
       console.warn('useRelatedVideos: failed', e);
     } finally {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [bvid]);
 
-  const videos = useMemo(() => pages.flat(), [pages]);
-  return { videos, loading, load };
+  return { videos, loading, load, hasMore: false };
 }
