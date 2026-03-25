@@ -4,7 +4,6 @@ import {
   Text,
   Image,
   StyleSheet,
-  TouchableOpacity,
   Animated,
   PanResponder,
   Dimensions,
@@ -26,84 +25,86 @@ const LIVE_HEADERS = {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 };
 
+function snapRelease(
+  pan: Animated.ValueXY,
+  curX: number,
+  curY: number,
+  sw: number,
+  sh: number,
+) {
+  const snapRight = 0;
+  const snapLeft = -(sw - MINI_W - 24);
+  const snapX = curX < snapLeft / 2 ? snapLeft : snapRight;
+  const clampedY = Math.max(-sh + MINI_H + 60, Math.min(60, curY));
+  Animated.spring(pan, {
+    toValue: { x: snapX, y: clampedY },
+    useNativeDriver: false,
+    tension: 120,
+    friction: 10,
+  }).start();
+}
+
 export function LiveMiniPlayer() {
   const { isActive, roomId, title, cover, hlsUrl, clearLive } = useLiveStore();
   const videoMiniActive = useVideoStore(s => s.isActive);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const pan = useRef(new Animated.ValueXY()).current;
+  const isDragging = useRef(false);
 
   const panResponder = useRef(
     PanResponder.create({
-      // 不在 start 阶段抢夺，让 TouchableOpacity 的点击正常触发
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
-      // 有实际位移时，从子组件夺回响应权（capture 阶段，优先于子组件）
-      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
-        Math.abs(dx) > 3 || Math.abs(dy) > 3,
-      onMoveShouldSetPanResponderCapture: (_, { dx, dy }) =>
-        Math.abs(dx) > 3 || Math.abs(dy) > 3,
+      onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        isDragging.current = false;
         pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
         pan.setValue({ x: 0, y: 0 });
       },
-      onPanResponderMove: Animated.event(
-        [null, { dx: pan.x, dy: pan.y }],
-        { useNativeDriver: false },
-      ),
-      onPanResponderRelease: () => {
+      onPanResponderMove: (_, gs) => {
+        if (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5) {
+          isDragging.current = true;
+        }
+        pan.x.setValue(gs.dx);
+        pan.y.setValue(gs.dy);
+      },
+      onPanResponderRelease: (evt) => {
         pan.flattenOffset();
+        if (!isDragging.current) {
+          const { locationX, locationY } = evt.nativeEvent;
+          if (locationX > MINI_W - 28 && locationY < 28) {
+            clearLive();
+          } else {
+            router.push(`/live/${roomId}` as any);
+          }
+          return;
+        }
         const { width: sw, height: sh } = Dimensions.get('window');
-        const curX = (pan.x as any)._value;
-        const curY = (pan.y as any)._value;
-
-        // 吸附到左边缘或右边缘（取最近的一侧）
-        const snapRight = 0;
-        const snapLeft = -(sw - MINI_W - 24);
-        const snapX = curX < snapLeft / 2 ? snapLeft : snapRight;
-
-        const clampedY = Math.max(-sh + MINI_H + 60, Math.min(60, curY));
-
-        Animated.spring(pan, {
-          toValue: { x: snapX, y: clampedY },
-          useNativeDriver: false,
-          tension: 120,
-          friction: 10,
-        }).start();
+        snapRelease(pan, (pan.x as any)._value, (pan.y as any)._value, sw, sh);
       },
-      onPanResponderTerminate: () => {
-        pan.flattenOffset();
-      },
+      onPanResponderTerminate: () => { pan.flattenOffset(); },
     }),
   ).current;
 
   if (!isActive) return null;
 
-  // 视频 MiniPlayer 激活时，直播小窗叠放其上方（避免重叠）
   const bottomOffset = insets.bottom + 16 + (videoMiniActive ? 106 : 0);
 
-  const handlePress = () => {
-    router.push(`/live/${roomId}` as any);
-  };
-
-  // Web 端降级：展示封面图 + LIVE 徽标
+  // Web 端降级：封面图 + LIVE 徽标
   if (Platform.OS === 'web') {
     return (
       <Animated.View
         style={[styles.container, { bottom: bottomOffset, transform: pan.getTranslateTransform() }]}
         {...panResponder.panHandlers}
       >
-        <TouchableOpacity style={styles.main} onPress={handlePress} activeOpacity={0.85}>
-          <Image source={{ uri: proxyImageUrl(cover) }} style={styles.videoArea} />
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
-          </View>
-          <Text style={styles.titleText} numberOfLines={1}>{title}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.closeBtn} onPress={clearLive}>
+        <Image source={{ uri: proxyImageUrl(cover) }} style={styles.videoArea} />
+        <View style={styles.liveBadge} pointerEvents="none">
+          <View style={styles.liveDot} />
+          <Text style={styles.liveText}>LIVE</Text>
+        </View>
+        <Text style={styles.titleText} numberOfLines={1}>{title}</Text>
+        <View style={styles.closeBtn}>
           <Ionicons name="close" size={14} color="#fff" />
-        </TouchableOpacity>
+        </View>
       </Animated.View>
     );
   }
@@ -116,29 +117,29 @@ export function LiveMiniPlayer() {
       style={[styles.container, { bottom: bottomOffset, transform: pan.getTranslateTransform() }]}
       {...panResponder.panHandlers}
     >
-      <TouchableOpacity style={styles.main} onPress={handlePress} activeOpacity={0.85}>
-        <View style={styles.videoArea}>
-          <Video
-            key={hlsUrl}
-            source={{ uri: hlsUrl, headers: LIVE_HEADERS }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            controls={false}
-            muted={false}
-            paused={false}
-            repeat={false}
-            onError={clearLive}
-          />
-        </View>
-        <View style={styles.liveBadge}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveText}>LIVE</Text>
-        </View>
-        <Text style={styles.titleText} numberOfLines={1}>{title}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.closeBtn} onPress={clearLive}>
+      {/* pointerEvents="none" 防止 Video 原生层吞噬触摸事件 */}
+      <View style={styles.videoArea} pointerEvents="none">
+        <Video
+          key={hlsUrl}
+          source={{ uri: hlsUrl, headers: LIVE_HEADERS }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          controls={false}
+          muted={false}
+          paused={false}
+          repeat={false}
+          onError={clearLive}
+        />
+      </View>
+      <View style={styles.liveBadge} pointerEvents="none">
+        <View style={styles.liveDot} />
+        <Text style={styles.liveText}>LIVE</Text>
+      </View>
+      <Text style={styles.titleText} numberOfLines={1}>{title}</Text>
+      {/* 关闭按钮视觉层，点击逻辑由 onPanResponderRelease 坐标判断 */}
+      <View style={styles.closeBtn}>
         <Ionicons name="close" size={14} color="#fff" />
-      </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 }
@@ -158,7 +159,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },
-  main: { flex: 1 },
   videoArea: {
     width: '100%',
     height: 66,

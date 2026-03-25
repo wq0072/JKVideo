@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import {
-  View, Text, Image, StyleSheet, TouchableOpacity,
+  View, Text, Image, StyleSheet,
   Animated, PanResponder, Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -17,32 +17,44 @@ export function MiniPlayer() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const pan = useRef(new Animated.ValueXY()).current;
+  const isDragging = useRef(false);
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
-        Math.abs(dx) > 3 || Math.abs(dy) > 3,
-      onMoveShouldSetPanResponderCapture: (_, { dx, dy }) =>
-        Math.abs(dx) > 3 || Math.abs(dy) > 3,
+      // 从 start 阶段即抢占响应权，确保拖动可靠触发
+      onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        isDragging.current = false;
         pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
         pan.setValue({ x: 0, y: 0 });
       },
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-      onPanResponderRelease: () => {
+      onPanResponderMove: (_, gs) => {
+        if (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5) {
+          isDragging.current = true;
+        }
+        pan.x.setValue(gs.dx);
+        pan.y.setValue(gs.dy);
+      },
+      onPanResponderRelease: (evt) => {
         pan.flattenOffset();
+        if (!isDragging.current) {
+          // 点击：通过坐标判断是关闭还是跳转
+          const { locationX, locationY } = evt.nativeEvent;
+          if (locationX > MINI_W - 28 && locationY < 28) {
+            clearVideo();
+          } else {
+            router.push(`/video/${bvid}` as any);
+          }
+          return;
+        }
+        // 拖动：吸附到最近边缘
         const { width: sw, height: sh } = Dimensions.get('window');
         const curX = (pan.x as any)._value;
         const curY = (pan.y as any)._value;
-
         const snapRight = 0;
         const snapLeft = -(sw - MINI_W - 24);
         const snapX = curX < snapLeft / 2 ? snapLeft : snapRight;
-
         const clampedY = Math.max(-sh + MINI_H + 60, Math.min(60, curY));
-
         Animated.spring(pan, {
           toValue: { x: snapX, y: clampedY },
           useNativeDriver: false,
@@ -50,9 +62,7 @@ export function MiniPlayer() {
           friction: 10,
         }).start();
       },
-      onPanResponderTerminate: () => {
-        pan.flattenOffset();
-      },
+      onPanResponderTerminate: () => { pan.flattenOffset(); },
     })
   ).current;
 
@@ -65,17 +75,12 @@ export function MiniPlayer() {
       style={[styles.container, { bottom: bottomOffset, transform: pan.getTranslateTransform() }]}
       {...panResponder.panHandlers}
     >
-      <TouchableOpacity
-        style={styles.main}
-        onPress={() => router.push(`/video/${bvid}` as any)}
-        activeOpacity={0.85}
-      >
-        <Image source={{ uri: proxyImageUrl(cover) }} style={styles.cover} />
-        <Text style={styles.title} numberOfLines={1}>{title}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.closeBtn} onPress={clearVideo}>
+      <Image source={{ uri: proxyImageUrl(cover) }} style={styles.cover} />
+      <Text style={styles.title} numberOfLines={1}>{title}</Text>
+      {/* 关闭按钮仅作视觉展示，点击逻辑由 onPanResponderRelease 坐标判断处理 */}
+      <View style={styles.closeBtn}>
         <Ionicons name="close" size={14} color="#fff" />
-      </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 }
@@ -84,8 +89,8 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     right: 12,
-    width: 160,
-    height: 90,
+    width: MINI_W,
+    height: MINI_H,
     borderRadius: 8,
     backgroundColor: '#1a1a1a',
     overflow: 'hidden',
@@ -95,7 +100,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },
-  main: { flex: 1 },
   cover: { width: '100%', height: 64, backgroundColor: '#333' },
   title: {
     color: '#fff',
