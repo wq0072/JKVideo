@@ -46,13 +46,18 @@ export function FollowedLiveStrip() {
           >
             <View style={styles.pulseRow}>
               <LivePulse />
-              <Text style={{ color: "#fff", fontSize: 9,marginLeft:2 }}>直播</Text>
+              <Text style={{ color: "#fff", fontSize: 9, marginLeft: 2 }}>
+                直播
+              </Text>
             </View>
             <Image
               source={{ uri: proxyImageUrl(room.face) }}
               style={[styles.avatar, { backgroundColor: theme.card }]}
             />
-            <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+            <Text
+              style={[styles.name, { color: theme.text }]}
+              numberOfLines={1}
+            >
               {room.uname.length > 5 ? room.uname.slice(0, 5) : room.uname}
             </Text>
           </TouchableOpacity>
@@ -65,7 +70,7 @@ export function FollowedLiveStrip() {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: "#f4f4f4",
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
     paddingVertical: 8,
   },
   scrollContent: {
